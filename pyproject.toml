@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "dashcam"
+version = "0.1.0"
+description = "Generates timelapse summary videos from raw dashcam video"
+authors = ["Jason Lynch <jason@calindora.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+rstcheck = "^3.3.1"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
