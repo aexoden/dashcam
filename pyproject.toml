@@ -6,10 +6,16 @@ authors = ["Jason Lynch <jason@calindora.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
+mercantile = "^1.2.1"
+requests = "^2.27.1"
+Pillow = "^9.0.1"
+progressbar2 = "^4.0.0"
 
 [tool.poetry.dev-dependencies]
-pytest = "^5.2"
+pytest = "^5.4.3"
 rstcheck = "^3.3.1"
+poetryup = "^0.5.1"
+flake8 = "^4.0.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
