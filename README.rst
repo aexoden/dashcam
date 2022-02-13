@@ -22,6 +22,7 @@ In addition, the following VapourSynth plugins are required:
 * ffmpegsource
 * fmtconv
 * havsfunc
+* mvtools
 
 There are several Python dependencies, so it is recommended to create a virtualenv using poetry and to run any commands
 from within that virtualenv.

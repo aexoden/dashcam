@@ -44,6 +44,15 @@ def generate_decimated_video(args: argparse.Namespace):
         subprocess.run([f'PATH=/usr/bin vspipe vapoursynth/decimate.vpy - -y -a "source={source_mkv_filename}" -a "map_source={map_mkv_filename}" | ffmpeg -i pipe: -c:v libx265 -preset slow -crf 18 {output_filename}'], shell=True, check=True)
 
 
+def generate_motion_blur_video(args: argparse.Namespace):
+    source_mkv_filename = get_source_mkv_filename(args)
+    map_mkv_filename = os.path.join(args.directory, 'dashcam-tmp-map.mkv')
+    output_filename = os.path.join(args.directory, 'dashcam-encoded-blur.mkv')
+
+    if not os.path.exists(output_filename):
+        subprocess.run([f'PATH=/usr/bin vspipe vapoursynth/blur.vpy - -y -a "source={source_mkv_filename}" -a "map_source={map_mkv_filename}" | ffmpeg -i pipe: -c:v libx265 -preset slow -crf 18 {output_filename}'], shell=True, check=True)
+
+
 def generate_source_video(args: argparse.Namespace):
     source_list_filename = get_source_list_filename(args)
     source_h265_filename = os.path.join(args.directory, 'dashcam-tmp-src.h265')
@@ -134,6 +143,9 @@ def main():
 
     print('Generating decimated video...')
     generate_decimated_video(args)
+
+    print('Generating motion blur video...')
+    generate_motion_blur_video(args)
 
 
 sys.exit(main())
