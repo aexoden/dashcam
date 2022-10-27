@@ -92,6 +92,7 @@ def generate_map_video(args: argparse.Namespace, frames: int):
 
             dy = (next_entry.latitude - current_entry.latitude) / frames
             dx = (next_entry.longitude - current_entry.longitude) / frames
+            dv = (next_entry.speed - current_entry.speed) / frames
 
             latitude = current_entry.latitude
             longitude = current_entry.longitude
@@ -107,6 +108,7 @@ def generate_map_video(args: argparse.Namespace, frames: int):
 
                 latitude += dy
                 longitude += dx
+                speed += dv
                 file_index += 1
 
             previous = target
