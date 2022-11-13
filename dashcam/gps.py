@@ -185,5 +185,5 @@ def extract_log(filename: str):
         elif next_newest_1:
             yield(LogEntry(next_newest_1[1], next_newest_1[2], next_newest_1[3]))
         else:
-            print('ERROR: Broken GPS log')
+            print(f'ERROR: Broken GPS log in {filename}')
             sys.exit(1)
