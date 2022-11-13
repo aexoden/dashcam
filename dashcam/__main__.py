@@ -4,8 +4,6 @@ import os
 import subprocess
 import sys
 
-import progressbar
-
 from . import gps, map
 
 
@@ -78,10 +76,9 @@ def generate_map_video(args: argparse.Namespace, frames: int):
         adjustment = frames / len(entries)
 
         previous = 0
-        file_index = 0
-        filenames: list[str] = []
+        encoder = subprocess.Popen(['ffmpeg', '-r', '60', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', f'{map.WIDTH}x{map.HEIGHT}', '-i', '-', '-c:v', 'ffv1', map_mkv_filename], stdin=subprocess.PIPE)
 
-        for index in progressbar.progressbar(range(len(entries))):
+        for index in range(len(entries)):
             target = int(adjustment * (index + 1) + 0.5)
             frames = target - previous
 
@@ -99,25 +96,17 @@ def generate_map_video(args: argparse.Namespace, frames: int):
             speed = current_entry.speed
 
             for _ in range(frames):
-                filename = f'{args.directory}/dashcam-tmp-map-{file_index:08}.png'
-                filenames.append(filename)
-
-                if not os.path.exists(filename):
-                    image = map.draw_frame(args.map_url, latitude, longitude, speed)
-                    image.save(filename)
+                image = map.draw_frame(args.map_url, latitude, longitude, speed)
+                encoder.stdin.write(image.tobytes())
+                encoder.stdin.flush()
 
                 latitude += dy
                 longitude += dx
                 speed += dv
-                file_index += 1
 
             previous = target
 
-        subprocess.run(['ffmpeg', '-r', '60', '-f', 'image2', '-i', f'{args.directory}/dashcam-tmp-map-%08d.png', '-c:v', 'ffv1', map_mkv_filename], check=True)
-
-        for filename in filenames:
-            os.remove(filename)
-
+        encoder.communicate()
 
 def main():
     parser = argparse.ArgumentParser(description='Generate a timelapse video from dashcam videos')
