@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 from dataclasses import dataclass
-from typing import cast, Optional
+from typing import Generator, Optional
 
 
 @dataclass
@@ -42,7 +42,7 @@ def extract_sentences(filename: str):
         data = f.read(size)
 
     for index in range(28, len(data), 132):
-        yield(decode_block(data[index:index + 132]))
+        yield decode_block(data[index:index + 132])
 
 
 def decode_block(block: bytes):
@@ -94,17 +94,13 @@ def decode_block(block: bytes):
     return ''.join([chr(x) for x in output[4:]])
 
 
-def extract_log(filename: str):
-    log: list[tuple[int, Optional[datetime.datetime], Optional[float], Optional[float], Optional[float]]] = []
-    base_ts: int = 0
-    base_ts_shift: int = 0
-
-    for block_index, sentence in enumerate(extract_sentences(filename)):
+def extract_log(filename: str) -> Generator[Optional[LogEntry], None, None]:
+    for sentence in extract_sentences(filename):
         try:
             matches = re.search('(.*) (N|S):([0-9.]*) (E|W):([0-9.]*) ([0-9.]*) km/h', sentence)
 
             if matches:
-                date = datetime.datetime.strptime(matches.group(1), '%Y/%m/%d %H:%M:%S')
+                _ = datetime.datetime.strptime(matches.group(1), '%Y/%m/%d %H:%M:%S')
                 latitude = float(matches.group(3))
                 longitude = float(matches.group(5))
                 speed = (float(matches.group(6)) * 1.852) / 1.609344
@@ -118,72 +114,75 @@ def extract_log(filename: str):
                 if matches.group(4) == 'W':
                     real_longitude *= -1
 
-                if base_ts == 0:
-                    base_ts = int(date.timestamp() - base_ts_shift)
-
-                log.append((block_index, date, real_latitude, real_longitude, speed))
+                yield LogEntry(real_latitude, real_longitude, speed)
             else:
                 print(f'ERROR: Unknown sentence {sentence}')
                 sys.exit(1)
         except Exception:
-            log.append((block_index, None, None, None, None))
+            yield None
 
-        base_ts_shift += 1
 
-    samples: list[tuple[int, float, float, float]] = []
+def extract_logs(filenames: list[str]) -> Generator[LogEntry, None, None]:
+    entries: list[Optional[LogEntry]] = []
 
-    for index in range(len(log)):
-        if (index > 0 and log[index][1:] == log[index - 1][1:]) or not log[index][1]:
-            continue
+    for filename in filenames:
+        entries.extend(list(extract_log(filename)))
 
-        date = cast(datetime.datetime, log[index][1])
-        latitude = cast(float, log[index][2])
-        longitude = cast(float, log[index][3])
-        speed = cast(float, log[index][4])
+    previous_entry: Optional[LogEntry] = None
+    previous_index = -1
 
-        ts = date.timestamp()
+    interpolation_active = False
+    base_index = None
+    base_x = None
+    base_y = None
+    base_v = None
+    dx = None
+    dy = None
+    dv = None
 
-        samples.append((int(ts - base_ts), latitude, longitude, speed))
-
-    for index in range(len(log)):
-        exact = None
-        next_oldest_2 = None
-        next_oldest_1 = None
-        next_newest_1 = None
-        next_newest_2 = None
-
-        for sample in samples:
-            if sample[0] == index:
-                exact = sample
-
-            if sample[0] < index:
-                next_oldest_2 = next_oldest_1
-                next_oldest_1 = sample
-
-            if sample[0] > index:
-                if not next_newest_1:
-                    next_newest_1 = sample
-                elif not next_newest_2:
-                    next_newest_2 = sample
-
-        if exact:
-            yield(LogEntry(exact[1], exact[2], exact[3]))
-        elif next_oldest_1 and next_newest_1:
-            dt = next_newest_1[0] - next_oldest_1[0]
-            dy = (next_newest_1[1] - next_oldest_1[1]) / dt
-            dx = (next_newest_1[2] - next_oldest_1[2]) / dt
-            dv = (next_newest_1[3] - next_oldest_1[3]) / dt
-            my_dt = index - next_oldest_1[0]
-            yield(LogEntry(next_oldest_1[1] + dy * my_dt, next_oldest_1[2] + dx * my_dt, next_oldest_1[3] + dv * my_dt))
-        elif next_oldest_1 and next_oldest_2:
-            dt = next_oldest_1[0] - next_oldest_2[0]
-            dy = (next_oldest_1[1] - next_oldest_2[1]) / dt
-            dx = (next_oldest_1[2] - next_oldest_2[2]) / dt
-            dv = (next_oldest_1[3] - next_oldest_2[3]) / dt
-            my_dt = index - next_oldest_1[0]
-            yield(LogEntry(next_oldest_1[1] + dy * my_dt, next_oldest_1[2] + dx * my_dt, next_oldest_1[3] + dv * my_dt))
-        elif next_newest_1:
-            yield(LogEntry(next_newest_1[1], next_newest_1[2], next_newest_1[3]))
+    for index, entry in enumerate(entries):
+        if entry:
+            previous_entry = entry
+            previous_index = index
+            interpolation_active = False
+            yield entry
         else:
-            print(f'ERROR: Broken GPS log in {filename}')
-            sys.exit(1)
+            next_entry: Optional[LogEntry] = None
+            next_index = len(entries)
+
+            for sub_index in range(index, len(entries)):
+                if entries[sub_index]:
+                    next_entry = entries[sub_index]
+                    next_index = sub_index
+                    break
+
+            if not interpolation_active:
+                if previous_entry is not None and next_entry is None:
+                    yield previous_entry
+                elif previous_entry is None and next_entry is not None:
+                    yield next_entry
+                elif previous_entry is not None and next_entry is not None:
+                    interpolation_active = True
+                    dt = next_index - previous_index
+                    dx = (next_entry.longitude - previous_entry.longitude) / dt
+                    dy = (next_entry.latitude - previous_entry.latitude) / dt
+                    dv = (next_entry.speed - previous_entry.speed) / dt
+                    base_index = previous_index
+                    base_x = previous_entry.longitude
+                    base_y = previous_entry.latitude
+                    base_v = previous_entry.speed
+                else:
+                    print('ERROR: No GPS data found')
+                    sys.exit(1)
+
+            if interpolation_active:
+                assert base_index is not None
+                assert base_x is not None
+                assert base_y is not None
+                assert base_v is not None
+                assert dx is not None
+                assert dy is not None
+                assert dv is not None
+
+                index_delta: int = index - base_index
+                yield LogEntry(base_y + index_delta * dy, base_x + index_delta * dx, base_v + index_delta * dv)

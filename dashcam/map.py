@@ -1,13 +1,12 @@
 import math
 import mercantile
-import os
 import requests
-import sys
 
 from PIL import Image, ImageDraw, ImageFont
 
 WIDTH = 384
 HEIGHT = 224
+
 
 def fetch_map(osm_url: str, latitude: float, longitude: float, zoom: float):
     full_image = Image.new('RGBA', (256 * 3, 256 * 3))

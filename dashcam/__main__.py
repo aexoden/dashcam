@@ -66,17 +66,15 @@ def generate_source_video(args: argparse.Namespace):
 
 def generate_map_video(args: argparse.Namespace, frames: int):
     map_mkv_filename = os.path.join(args.directory, 'dashcam-tmp-map.mkv')
-    entries: list[gps.LogEntry] = []
 
     if not os.path.exists(map_mkv_filename):
-        for source_filename in get_source_videos(args):
-            for entry in gps.extract_log(source_filename):
-                entries.append(entry)
-
+        entries: list[gps.LogEntry] = list(gps.extract_logs(get_source_videos(args)))
         adjustment = frames / len(entries)
 
         previous = 0
         encoder = subprocess.Popen(['ffmpeg', '-r', '60', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', f'{map.WIDTH}x{map.HEIGHT}', '-i', '-', '-c:v', 'ffv1', map_mkv_filename], stdin=subprocess.PIPE)
+
+        assert encoder.stdin is not None
 
         for index in range(len(entries)):
             target = int(adjustment * (index + 1) + 0.5)
@@ -107,6 +105,7 @@ def generate_map_video(args: argparse.Namespace, frames: int):
             previous = target
 
         encoder.communicate()
+
 
 def main():
     parser = argparse.ArgumentParser(description='Generate a timelapse video from dashcam videos')
