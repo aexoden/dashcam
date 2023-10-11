@@ -65,7 +65,7 @@ def fetch_map(osm_url: str, latitude: float, longitude: float, zoom: float):
 
 
 def draw_frame(osm_url: str, latitude: float, longitude: float, speed: float):
-    font = ImageFont.truetype('/usr/share/fonts/liberation-fonts/LiberationSans-Regular.ttf', layout_engine=ImageFont.LAYOUT_RAQM)
+    font = ImageFont.truetype('/usr/share/fonts/liberation-fonts/LiberationSans-Regular.ttf', layout_engine=ImageFont.Layout.RAQM)
     zoom = 12
 
     #if speed <= 40:
