@@ -39,7 +39,7 @@ def generate_decimated_video(args: argparse.Namespace):
     output_filename = os.path.join(args.directory, 'dashcam-encoded-decimate.mkv')
 
     if not os.path.exists(output_filename):
-        subprocess.run([f'PATH=/usr/bin vspipe vapoursynth/decimate.vpy - -y -a "source={source_mkv_filename}" -a "map_source={map_mkv_filename}" | ffmpeg -i pipe: -c:v libx265 -preset slow -crf 18 {output_filename}'], shell=True, check=True)
+        subprocess.run([f'vspipe vapoursynth/decimate.vpy - -y -a "source={source_mkv_filename}" -a "map_source={map_mkv_filename}" | ffmpeg -i pipe: -c:v libx265 -preset slow -crf 18 {output_filename}'], shell=True, check=True)
 
 
 def generate_motion_blur_video(args: argparse.Namespace):
@@ -48,7 +48,7 @@ def generate_motion_blur_video(args: argparse.Namespace):
     output_filename = os.path.join(args.directory, 'dashcam-encoded-blur.mkv')
 
     if not os.path.exists(output_filename):
-        subprocess.run([f'PATH=/usr/bin vspipe vapoursynth/blur.vpy - -y -a "source={source_mkv_filename}" -a "map_source={map_mkv_filename}" | ffmpeg -i pipe: -c:v libx265 -preset slow -crf 18 {output_filename}'], shell=True, check=True)
+        subprocess.run([f'vspipe vapoursynth/blur.vpy - -y -a "source={source_mkv_filename}" -a "map_source={map_mkv_filename}" | ffmpeg -i pipe: -c:v libx265 -preset slow -crf 18 {output_filename}'], shell=True, check=True)
 
 
 def generate_source_video(args: argparse.Namespace):
@@ -109,8 +109,8 @@ def generate_map_video(args: argparse.Namespace, frames: int):
 
 def main():
     parser = argparse.ArgumentParser(description='Generate a timelapse video from dashcam videos')
-    parser.add_argument('map_url', metavar='MAP_URL', type=str, help='URL to the OpenStreetMap tile server')
     parser.add_argument('directory', metavar='DIRECTORY', type=str, help='directory containing the source videos')
+    parser.add_argument('map_url', metavar='MAP_URL', type=str, help='URL to the OpenStreetMap tile server')
 
     args = parser.parse_args()
 
