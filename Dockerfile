@@ -11,6 +11,7 @@ RUN aur-install \
     python-mercantile \
     python-pillow \
     python-requests \
+    schedtool \
     ttf-liberation \
     vapoursynth \
     vapoursynth-plugin-adjust \
@@ -32,5 +33,5 @@ WORKDIR /home/app_user/dashcam
 # Work around exiftool being installed to a weird location
 ENV PATH="/usr/bin/vendor_perl:$PATH"
 
-ENTRYPOINT ["/usr/bin/python", "-m", "dashcam", "/work"]
+ENTRYPOINT ["schedtool", "-B", "-n", "19", "-e", "/usr/bin/python", "-m", "dashcam", "/work"]
 CMD ["http://localhost/hot"]
