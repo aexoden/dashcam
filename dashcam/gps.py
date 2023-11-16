@@ -95,15 +95,39 @@ def decode_block(block: bytes):
 
 
 def extract_log(filename: str) -> Generator[Optional[LogEntry], None, None]:
+    last_timestamp: Optional[datetime.datetime] = None
+    base_timestamp: Optional[datetime.datetime] = None
+    base_timestamp_offset = 0
+
+    entry_count = 0
+    sentence_count = 0
+
     for sentence in extract_sentences(filename):
+        sentence_count += 1
+
         try:
             matches = re.search('(.*) (N|S):([0-9.]*) (E|W):([0-9.]*) ([0-9.]*) km/h', sentence)
 
             if matches:
-                _ = datetime.datetime.strptime(matches.group(1), '%Y/%m/%d %H:%M:%S')
+                timestamp = datetime.datetime.strptime(matches.group(1), '%Y/%m/%d %H:%M:%S')
                 latitude = float(matches.group(3))
                 longitude = float(matches.group(5))
                 speed = (float(matches.group(6)) * 1.852) / 1.609344
+
+                if not base_timestamp:
+                    base_timestamp = timestamp
+                    base_timestamp_offset = entry_count
+
+                target_index = int((timestamp - base_timestamp).total_seconds()) + base_timestamp_offset
+
+                while entry_count < target_index:
+                    entry_count += 1
+                    yield None
+
+                if timestamp == last_timestamp:
+                    continue
+
+                last_timestamp = timestamp
 
                 real_latitude = (latitude // 10) * 10.0 + (longitude % 10 * 1.524855)
                 real_longitude = (longitude // 10) * 10.0 + (latitude % 10 * 1.524855)
@@ -114,12 +138,19 @@ def extract_log(filename: str) -> Generator[Optional[LogEntry], None, None]:
                 if matches.group(4) == 'W':
                     real_longitude *= -1
 
+                entry_count += 1
+
                 yield LogEntry(real_latitude, real_longitude, speed)
             else:
                 print(f'ERROR: Unknown sentence {sentence}')
                 sys.exit(1)
         except Exception:
+            entry_count += 1
             yield None
+
+    while entry_count < sentence_count:
+        entry_count += 1
+        yield None
 
 
 def extract_logs(filenames: list[str]) -> Generator[LogEntry, None, None]:
