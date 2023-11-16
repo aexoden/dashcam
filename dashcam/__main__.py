@@ -1,5 +1,6 @@
 import argparse
 import glob
+import json
 import os
 import subprocess
 import sys
@@ -19,9 +20,25 @@ def get_source_mkv_filename(args: argparse.Namespace):
     return os.path.join(args.directory, 'dashcam-tmp-src.mkv')
 
 
+def get_source_cache_filename(args: argparse.Namespace):
+    return os.path.join(args.directory, 'dashcam-tmp-src.json')
+
+
 def get_frame_count(args: argparse.Namespace):
+    cache_filename = get_source_cache_filename(args)
+
+    if os.path.exists(cache_filename):
+        with open(cache_filename, encoding='utf-8') as f:
+            data = json.load(f)
+            return data['frame_count']
+
     result = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-count_packets', '-show_entries', 'stream=nb_read_packets', '-of', 'csv=p=0', get_source_mkv_filename(args)], capture_output=True)
-    return int(result.stdout.strip()) // 4
+    frame_count = int(result.stdout.strip()) // 4
+
+    with open(cache_filename, 'w', encoding='utf-8') as f:
+        json.dump({'frame_count': frame_count}, f)
+
+    return frame_count
 
 
 def generate_source_list(args: argparse.Namespace):
