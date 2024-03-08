@@ -21,7 +21,7 @@ your own tile server can be found at <https://switch2osm.org/>.
 
 ## Tested Compatible Dashcams
 
-* VanTop V9H
+* VanTop H612T
 
 ## Usage
 
