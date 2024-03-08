@@ -152,6 +152,9 @@ def extract_log(filename: str) -> Generator[Optional[LogEntry], None, None]:
         entry_count += 1
         yield None
 
+    if sentence_count == 0:
+        print(f'WARNING: {filename} had zero GPS sentences.')
+
 
 def extract_logs(filenames: list[str]) -> Generator[LogEntry, None, None]:
     entries: list[Optional[LogEntry]] = []
