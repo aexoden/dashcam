@@ -5,7 +5,8 @@ import os
 import subprocess
 import sys
 
-from . import gps, map
+from . import gps
+from . import map as dashcam_map
 
 
 def get_source_videos(args: argparse.Namespace):
@@ -32,7 +33,7 @@ def get_frame_count(args: argparse.Namespace):
             data = json.load(f)
             return data['frame_count']
 
-    result = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-count_packets', '-show_entries', 'stream=nb_read_packets', '-of', 'csv=p=0', get_source_mkv_filename(args)], capture_output=True)
+    result = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-count_packets', '-show_entries', 'stream=nb_read_packets', '-of', 'csv=p=0', get_source_mkv_filename(args)], capture_output=True, check=True)
     frame_count = int(result.stdout.strip()) // 4
 
     with open(cache_filename, 'w', encoding='utf-8') as f:
@@ -45,7 +46,7 @@ def generate_source_list(args: argparse.Namespace):
     output_filename = get_source_list_filename(args)
 
     if not os.path.exists(output_filename):
-        with open(output_filename, 'w') as f:
+        with open(output_filename, 'w', encoding='utf-8') as f:
             for source_filename in get_source_videos(args):
                 f.write(f"file '{os.path.basename(source_filename)}'\n")
 
@@ -89,7 +90,7 @@ def generate_map_video(args: argparse.Namespace, frames: int):
         adjustment = frames / len(entries)
 
         previous = 0
-        encoder = subprocess.Popen(['ffmpeg', '-r', '60', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', f'{map.WIDTH}x{map.HEIGHT}', '-i', '-', '-c:v', 'ffv1', map_mkv_filename], stdin=subprocess.PIPE)
+        encoder = subprocess.Popen(['ffmpeg', '-r', '60', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', f'{dashcam_map.WIDTH}x{dashcam_map.HEIGHT}', '-i', '-', '-c:v', 'ffv1', map_mkv_filename], stdin=subprocess.PIPE)
 
         assert encoder.stdin is not None
 
@@ -111,7 +112,7 @@ def generate_map_video(args: argparse.Namespace, frames: int):
             speed = current_entry.speed
 
             for _ in range(frames):
-                image = map.draw_frame(args.map_url, latitude, longitude, speed)
+                image = dashcam_map.draw_frame(args.map_url, latitude, longitude, speed)
                 encoder.stdin.write(image.tobytes())
                 encoder.stdin.flush()
 
