@@ -51,18 +51,18 @@ def generate_source_list(args: argparse.Namespace):
                 f.write(f"file '{os.path.basename(source_filename)}'\n")
 
 
-def generate_decimated_video(args: argparse.Namespace):
+def generate_decimated_video(args: argparse.Namespace, map_overlay: bool):
     source_mkv_filename = get_source_mkv_filename(args)
-    map_mkv_filename = os.path.join(args.directory, 'dashcam-tmp-map.mkv')
+    map_mkv_filename = os.path.join(args.directory, 'dashcam-tmp-map.mkv') if map_overlay else 'None'
     output_filename = os.path.join(args.directory, 'dashcam-encoded-decimate.mkv')
 
     if not os.path.exists(output_filename):
         subprocess.run([f'vspipe vapoursynth/decimate.vpy - -c y4m -a "source={source_mkv_filename}" -a "map_source={map_mkv_filename}" | ffmpeg -i pipe: -c:v libx265 -preset slow -crf 18 {output_filename}'], shell=True, check=True)
 
 
-def generate_motion_blur_video(args: argparse.Namespace):
+def generate_motion_blur_video(args: argparse.Namespace, map_overlay: bool):
     source_mkv_filename = get_source_mkv_filename(args)
-    map_mkv_filename = os.path.join(args.directory, 'dashcam-tmp-map.mkv')
+    map_mkv_filename = os.path.join(args.directory, 'dashcam-tmp-map.mkv') if map_overlay else 'None'
     output_filename = os.path.join(args.directory, 'dashcam-encoded-blur.mkv')
 
     if not os.path.exists(output_filename):
@@ -71,22 +71,28 @@ def generate_motion_blur_video(args: argparse.Namespace):
 
 def generate_source_video(args: argparse.Namespace):
     source_list_filename = get_source_list_filename(args)
-    source_h265_filename = os.path.join(args.directory, 'dashcam-tmp-src.h265')
+    tmp_extension = 'h265' if args.camera == 'vantop' else 'h264'
+    source_tmp_filename = os.path.join(args.directory, f'dashcam-tmp-src.{tmp_extension}')
     source_mkv_filename = get_source_mkv_filename(args)
 
     if not os.path.exists(source_mkv_filename):
-        if not os.path.exists(source_h265_filename):
-            subprocess.run(['ffmpeg', '-f', 'concat', '-i', source_list_filename, '-map', '0:v', '-c:v', 'copy', '-bsf:v', 'hevc_mp4toannexb', source_h265_filename], cwd=args.directory, check=True)
+        if not os.path.exists(source_tmp_filename):
+            codec = 'hevc_mp4toannexb' if args.camera == 'vantop' else 'h264_mp4toannexb'
+            subprocess.run(['ffmpeg', '-f', 'concat', '-i', source_list_filename, '-map', '0:v', '-c:v', 'copy', '-bsf:v', codec, source_tmp_filename], cwd=args.directory, check=True)
 
-        subprocess.run(['ffmpeg', '-fflags', '+genpts', '-r', '25', '-i', source_h265_filename, '-c:v', 'copy', source_mkv_filename], cwd=args.directory, check=True)
-        os.remove(source_h265_filename)
+        subprocess.run(['ffmpeg', '-fflags', '+genpts', '-r', '25', '-i', source_tmp_filename, '-c:v', 'copy', source_mkv_filename], cwd=args.directory, check=True)
+        os.remove(source_tmp_filename)
 
 
 def generate_map_video(args: argparse.Namespace, frames: int):
     map_mkv_filename = os.path.join(args.directory, 'dashcam-tmp-map.mkv')
 
     if not os.path.exists(map_mkv_filename):
-        entries: list[gps.LogEntry] = list(gps.extract_logs(get_source_videos(args)))
+        entries: list[gps.LogEntry] = list(gps.extract_logs(get_source_videos(args), args.camera))
+
+        if len(entries) == 0:
+            return False
+
         adjustment = frames / len(entries)
 
         previous = 0
@@ -124,9 +130,12 @@ def generate_map_video(args: argparse.Namespace, frames: int):
 
         encoder.communicate()
 
+    return True
+
 
 def main():
     parser = argparse.ArgumentParser(description='Generate a timelapse video from dashcam videos')
+    parser.add_argument('-c', '--camera', type=str, choices=['vantop', 'novatek'], default='novatek')
     parser.add_argument('directory', metavar='DIRECTORY', type=str, help='directory containing the source videos')
     parser.add_argument('map_url', metavar='MAP_URL', type=str, help='URL to the OpenStreetMap tile server')
 
@@ -147,13 +156,16 @@ def main():
     print(f' {frame_count}')
 
     print('Generating map overlay video...')
-    generate_map_video(args, frame_count)
+    map_overlay = generate_map_video(args, frame_count)
+
+    if not map_overlay:
+        print('WARNING: No GPS data was found. Not generating map overlay.')
 
     print('Generating decimated video...')
-    generate_decimated_video(args)
+    generate_decimated_video(args, map_overlay)
 
     print('Generating motion blur video...')
-    generate_motion_blur_video(args)
+    generate_motion_blur_video(args, map_overlay)
 
 
 sys.exit(main())

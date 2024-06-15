@@ -1,5 +1,6 @@
 import datetime
 import re
+import struct
 import subprocess
 import sys
 
@@ -14,7 +15,32 @@ class LogEntry:
     speed: float
 
 
-def read_offset(filename: str):
+def read_offset_novatek(filename: str):
+    offset: int = 0
+    size: int = 0
+    read_offset = False
+
+    output = subprocess.check_output(['exiftool', '-v3', filename]).decode('utf-8').split('\n')
+
+    for line in output:
+        if read_offset:
+            matches = re.search(r'([0-9a-f]+):.*', line)
+
+            if matches:
+                offset = int(matches.group(1), 16)
+
+            read_offset = False
+
+        matches = re.search(r"Tag 'gps '.*\(([0-9]+) bytes", line)
+
+        if matches:
+            size = int(matches.group(1))
+            read_offset = True
+
+    return offset, size
+
+
+def read_offset_vantop(filename: str):
     offset: int = 0
     size: int = 0
 
@@ -34,18 +60,32 @@ def read_offset(filename: str):
     return offset, size
 
 
-def extract_sentences(filename: str):
-    offset, size = read_offset(filename)
+def convert_coordinate(coordinate: float):
+    minutes = coordinate % 100
+    degrees = (coordinate - minutes) / 100
 
-    with open(filename, 'rb') as f:
-        f.seek(offset)
-        data = f.read(size)
-
-    for index in range(28, len(data), 132):
-        yield decode_block(data[index:index + 132])
+    return degrees + (minutes / 60)
 
 
-def decode_block(block: bytes):
+def decode_block_novatek(block: bytes):
+    hour, minute, second, year, month, day = struct.unpack_from('<IIIIII', block, 0)
+    year += 2000
+
+    ns = chr(block[25])
+    ew = chr(block[26])
+
+    latitude, longitude, speed, = struct.unpack_from('<fff', block, 28)
+
+    latitude = convert_coordinate(latitude)
+    longitude = convert_coordinate(longitude)
+
+    timestamp = f'{year:04}/{month:02}/{day:02} {hour:02}:{minute:02}:{second:02}'
+    coordinates = f'{ns}:{latitude} {ew}:{longitude} {speed} km/h'
+
+    return f'{timestamp} {coordinates}'
+
+
+def decode_block_vantop(block: bytes):
     output: list[int] = []
 
     index = 0
@@ -94,7 +134,53 @@ def decode_block(block: bytes):
     return ''.join([chr(x) for x in output[4:]])
 
 
-def extract_log(filename: str) -> Generator[Optional[LogEntry], None, None]:
+def extract_sentences_novatek(filename: str):
+    offset, size = read_offset_novatek(filename)
+
+    with open(filename, 'rb') as f:
+        f.seek(offset)
+        data = f.read(size)
+
+    for index in range(8, len(data), 8):
+        block_offset = struct.unpack_from('>I', data, index)[0]
+        block_size = struct.unpack_from('>I', data, index + 4)[0]
+
+        with open(filename, 'rb') as f:
+            f.seek(block_offset)
+            block_data = f.read(block_size)
+
+        if block_data[8:12].decode('utf-8') != 'GPS ':
+            yield None
+            continue
+
+        block_index = 12
+        result = None
+
+        while block_index < len(block_data) - 44:
+            test_latitude = chr(block_data[block_index + 25])
+            test_longitude = chr(block_data[block_index + 26])
+
+            if test_latitude in ['N', 'S'] and test_longitude in ['E', 'W']:
+                result = decode_block_novatek(block_data[block_index:block_index + 44])
+                break
+
+            block_index += 1
+
+        yield result
+
+
+def extract_sentences_vantop(filename: str):
+    offset, size = read_offset_vantop(filename)
+
+    with open(filename, 'rb') as f:
+        f.seek(offset)
+        data = f.read(size)
+
+    for index in range(28, len(data), 132):
+        yield decode_block_vantop(data[index:index + 132])
+
+
+def extract_log(filename: str, log_type: str) -> Generator[Optional[LogEntry], None, None]:
     last_timestamp: Optional[datetime.datetime] = None
     base_timestamp: Optional[datetime.datetime] = None
     base_timestamp_offset = 0
@@ -102,11 +188,11 @@ def extract_log(filename: str) -> Generator[Optional[LogEntry], None, None]:
     entry_count = 0
     sentence_count = 0
 
-    for sentence in extract_sentences(filename):
+    for sentence in extract_sentences_vantop(filename) if log_type == 'vantop' else extract_sentences_novatek(filename):
         sentence_count += 1
 
         try:
-            matches = re.search('(.*) (N|S):([0-9.]*) (E|W):([0-9.]*) ([0-9.]*) km/h', sentence)
+            matches = re.search(r'(.*) (N|S):([0-9.]*) (E|W):([0-9.]*) ([0-9.]*) km/h', sentence)
 
             if matches:
                 timestamp = datetime.datetime.strptime(matches.group(1), '%Y/%m/%d %H:%M:%S')
@@ -129,8 +215,12 @@ def extract_log(filename: str) -> Generator[Optional[LogEntry], None, None]:
 
                 last_timestamp = timestamp
 
-                real_latitude = (latitude // 10) * 10.0 + (longitude % 10 * 1.524855)
-                real_longitude = (longitude // 10) * 10.0 + (latitude % 10 * 1.524855)
+                if log_type == 'vantop':
+                    real_latitude = (latitude // 10) * 10.0 + (longitude % 10 * 1.524855)
+                    real_longitude = (longitude // 10) * 10.0 + (latitude % 10 * 1.524855)
+                else:
+                    real_latitude = latitude
+                    real_longitude = longitude
 
                 if matches.group(2) == 'S':
                     real_latitude *= -1
@@ -156,11 +246,11 @@ def extract_log(filename: str) -> Generator[Optional[LogEntry], None, None]:
         print(f'WARNING: {filename} had zero GPS sentences.')
 
 
-def extract_logs(filenames: list[str]) -> Generator[LogEntry, None, None]:
+def extract_logs(filenames: list[str], log_type: str) -> Generator[LogEntry, None, None]:
     entries: list[Optional[LogEntry]] = []
 
     for filename in filenames:
-        entries.extend(list(extract_log(filename)))
+        entries.extend(list(extract_log(filename, log_type)))
 
     previous_entry: Optional[LogEntry] = None
     previous_index = -1

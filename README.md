@@ -21,7 +21,21 @@ your own tile server can be found at <https://switch2osm.org/>.
 
 ## Tested Compatible Dashcams
 
-* VanTop H612T
+I currently own and test the following two dashcams:
+
+### VanTop H612T
+
+Other cameras from VanTop (or perhaps cameras from other brands that use similar
+electronics) may also be compatible, but I am unable to test those. This
+particular camera obfuscates its GPS data, so deobfuscation is performed before
+generating the final output.
+
+### Mercylion Front 4K (Novatek)
+
+This camera is based on a standard Novatek image processor. Other cameras also
+using Novatek processors may be compatible, but again, I am unable to test this.
+From my research, some cameras based on Novatek processors obfuscate their GPS
+data, but my model does not, so the script currently performs no deobfuscation.
 
 ## Usage
 
@@ -31,12 +45,24 @@ First, build the docker image:
 
 Assuming the image built correctly, use the application as follows:
 
-`docker run -v "<video directory>:/work" -it dashcam <OpenStreetMap URL>`
+`docker run -v "<video directory>:/work" -it dashcam -c <Camera Type> <OpenStreetMap URL>`
 
 Replace `<video directory>` with the path to a directory containing the raw
 video files. Replace `<OpenStreetMap URL>` with the URL to an OpenStreetMap tile
 server. The default is <http://localhost/hot> but this is unlikely to work
-unless you happen to already be running a tile server.
+unless you happen to already be running a tile server. Replace `<Camera Type>`
+with either `novatek` or `vantop` as appropriate.
+
+## Contribution
+
+While this software is primarily intended for my own personal use, I am not
+opposed to third-party contributions to either fix bugs, add support for
+additional camera models, or to add additional features.
+
+I'm particularly unhappy with the way I've currently added support for the
+Novatek camera, so the entire GPS module is a strong candidate for refactoring.
+As the software works as-is for my use case, I am personally unlikely to do much
+development work.
 
 ## Author
 
