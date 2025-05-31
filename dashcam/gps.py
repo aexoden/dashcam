@@ -296,8 +296,7 @@ def extract_logs(filenames: list[str], log_type: str) -> Generator[LogEntry, Non
                     base_y = previous_entry.latitude
                     base_v = previous_entry.speed
                 else:
-                    print('ERROR: No GPS data found')
-                    sys.exit(1)
+                    return
 
             if interpolation_active:
                 assert base_index is not None
